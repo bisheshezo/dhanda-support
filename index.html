@@ -45,7 +45,31 @@ function renderAgents(){let q=($('searchAgents')?.value||'').toLowerCase(),list=
 async function createAgent(){let employee_id=$('empId').value.trim(),agent_name=$('agentName').value.trim(),email=$('agentEmail').value.trim().toLowerCase();if(!employee_id||!agent_name||!email){toast('Complete all fields');return}if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Enter a valid email address');return}if(agents.some(a=>String(a.employee_id).trim().toLowerCase()===employee_id.toLowerCase())){toast('Employee ID already exists');return}if(agents.some(a=>String(a.email).trim().toLowerCase()===email)){toast('Email already exists in People');return}let btn=document.querySelector('#page-people .two .card button');if(btn)btn.disabled=true;let {error}=await db.from('agents').insert({employee_id,agent_name,email});if(btn)btn.disabled=false;if(error){toast(error.message);return}$('empId').value=$('agentName').value=$('agentEmail').value='';await loadAgents();await refreshDashboard();toast('Agent profile saved. Login account is not created.')}
 async function deleteAgent(id){if(!confirm('Delete this agent?'))return;let {error}=await db.from('agents').delete().eq('id',id);if(error){toast(error.message);return}await loadAgents();await refreshDashboard();toast('Agent deleted')}
 function csvRows(text){let out=[],row=[],v='',q=false;for(let i=0;i<text.length;i++){let c=text[i],n=text[i+1];if(c==='"'&&q&&n==='"'){v+='"';i++}else if(c==='"')q=!q;else if(c===','&&!q){row.push(v);v=''}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&n==='\n')i++;row.push(v);if(row.some(x=>x.trim()))out.push(row);row=[];v=''}else v+=c}row.push(v);if(row.some(x=>x.trim()))out.push(row);return out}
-async function uploadPeople(e){let f=e.target.files[0];if(!f)return;let rows=csvRows(await f.text()),h=rows.shift().map(x=>x.trim().toLowerCase()),idx=['employee id','agent name','email'].map(x=>h.indexOf(x));if(idx.some(x=>x<0)){toast('CSV headers: Employee ID, Agent Name, Email');return}let payload=rows.map(r=>({employee_id:(r[idx[0]]||'').trim(),agent_name:(r[idx[1]]||'').trim(),email:(r[idx[2]]||'').trim().toLowerCase()})).filter(x=>x.employee_id&&x.agent_name&&x.email);if(!payload.length){toast('No valid rows');return}let {error}=await db.from('agents').upsert(payload,{onConflict:'employee_id'});if(error){toast(error.message);return}await loadAgents();await refreshDashboard();toast(payload.length+' rows uploaded');e.target.value=''}
+async function uploadPeople(e){
+if(!isAdmin){toast('Admin only');e.target.value='';return}
+let f=e.target.files[0];if(!f)return;
+try{
+let rows=csvRows(await f.text());if(!rows.length)throw Error('CSV is empty');
+let h=rows.shift().map(x=>x.trim().toLowerCase()),idx=['employee id','agent name','email'].map(x=>h.indexOf(x));
+if(idx.some(x=>x<0))throw Error('CSV headers: Employee ID, Agent Name, Email');
+let payload=rows.map(r=>({employee_id:(r[idx[0]]||'').trim(),agent_name:(r[idx[1]]||'').trim(),email:(r[idx[2]]||'').trim().toLowerCase()})).filter(x=>x.employee_id&&x.agent_name&&x.email);
+if(!payload.length)throw Error('No valid rows');
+let ids=new Set(),emails=new Set();
+for(const a of payload){
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))throw Error('Invalid email in CSV: '+a.email);
+let id=a.employee_id.toLowerCase();
+if(ids.has(id))throw Error('Duplicate Employee ID in CSV: '+a.employee_id);
+if(emails.has(a.email))throw Error('Duplicate email in CSV: '+a.email);
+ids.add(id);emails.add(a.email);
+}
+for(const a of payload){
+if(agents.some(x=>String(x.employee_id).trim().toLowerCase()===a.employee_id.toLowerCase()))throw Error('Employee ID already exists: '+a.employee_id);
+if(agents.some(x=>String(x.email).trim().toLowerCase()===a.email))throw Error('Email already exists: '+a.email);
+}
+let {error}=await db.from('agents').insert(payload);if(error)throw error;
+await loadAgents();await refreshDashboard();toast(payload.length+' agents uploaded');
+}catch(err){toast(err.message||'CSV upload failed')}finally{e.target.value=''}
+}
 function csvCell(x){return '"'+String(x??'').replace(/"/g,'""')+'"'}
 function download(name,rows){let content=rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url)}
 function sampleCSV(){download('dhanda_people_sample.csv',[['Employee ID','Agent Name','Email'],['11701','Aftab Ahmed','aftab@example.com'],['11702','Akhil Qureshi','akhil@example.com']])}
