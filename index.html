@@ -105,7 +105,7 @@ function renderOnboardingCases(){
  const me=currentAgent();
  $('onboardingRows').innerHTML=onboardingCases.length?onboardingCases.map(c=>{
  const d=c.record_data||{},business=onboardingCell(d,['Business Name']),customer=onboardingCell(d,['Customer Name']),phone=onboardingCell(d,['Phone Number','ALT NO','Alternate no.']),mine=me&&c.rm_agent_id===me.id;
- let action=mine?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':(canManageAllOnboarding()?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':'<button onclick="claimOnboarding(\''+c.id+'\')">Assign to Me</button>');
+ let action=mine?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':(canManageAllOnboarding()?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':'<button onclick="claimOnboarding(\''+c.id+'\',\''+(c.rm_agent_id||'')+'\')">Assign to Me</button>');
  return '<tr><td>'+esc(c.profile_id)+'</td><td>'+esc(business)+'</td><td>'+esc(customer)+'</td><td>'+esc(phone)+'</td><td>'+esc(c.assigned_by)+'</td><td>'+esc(c.rm_agent_name||'Unassigned')+'</td><td>'+esc(c.onboarding_status)+'</td><td>'+action+' <button class="secondary" onclick="showOnboardingHistory(\''+c.id+'\')">History</button></td></tr>'
  }).join(''):'<tr><td colspan="8" class="empty">No onboarding cases found.</td></tr>'
 }
