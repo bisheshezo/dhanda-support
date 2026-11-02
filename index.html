@@ -28,7 +28,7 @@
 <section class="page" id="page-onboarding">
 <div class="head"><h2>Onboarding Tracker</h2><button class="secondary" onclick="loadOnboardingCases()">Refresh</button></div>
 <div class="card"><div class="toolbar"><input id="onboardingSearch" type="search" placeholder="Search mobile / ALT NO / Profile ID / Business Name" oninput="searchOnboarding()"><span class="muted" id="onboardingCount"></span></div><p class="muted">Search all cases. Agents can view other cases and assign them to themselves; editing is enabled only after assignment.</p></div>
-<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Profile ID</th><th>Business Name</th><th>Customer Name</th><th>Mobile / ALT NO</th><th>Assigned By</th><th>RM (Current Agent)</th><th>Status</th><th>Action</th></tr></thead><tbody id="onboardingRows"><tr><td colspan="8" class="empty">Loading cases…</td></tr></tbody></table></div>
+<div class="tablewrap" style="margin-top:12px;overflow:auto"><table><thead><tr id="onboardingHeaders"></tr></thead><tbody id="onboardingRows"><tr><td class="empty">Loading cases…</td></tr></tbody></table></div>
 </section>
 </main></div><div class="modal-backdrop" id="editModal"><div class="modal"><h3>Edit Agent</h3><div class="field"><label>Employee ID</label><input id="editEmpId"></div><div class="field"><label>Agent Name</label><input id="editAgentName"></div><div class="field"><label>Email</label><input id="editAgentEmail" type="email"></div><div class="field"><label>Designation / Level</label><select id="editDesignation"><option>Agent</option><option>Team Leader</option><option>Supervisor</option><option>Manager</option></select></div><div class="modal-actions"><button class="secondary" onclick="closeEditAgent()">Cancel</button><button onclick="saveEditAgent()">Save Changes</button></div></div></div><div class="modal-backdrop" id="onboardingEditModal"><div class="modal" style="width:min(760px,100%);max-height:90vh;overflow:auto"><h3>Edit Onboarding Case</h3><div id="onboardingEditFields"></div><div class="modal-actions"><button class="secondary" onclick="closeOnboardingEdit()">Cancel</button><button onclick="saveOnboardingEdit()">Save Update</button></div></div></div><div class="modal-backdrop" id="onboardingTransferModal"><div class="modal"><h3>Transfer Onboarding Case</h3><div class="field"><label>Transfer to Agent</label><select id="transferTarget"></select></div><div class="modal-actions"><button class="secondary" onclick="closeTransfer()">Cancel</button><button onclick="confirmTransfer()">Transfer Case</button></div></div></div><div class="modal-backdrop" id="onboardingHistoryModal"><div class="modal" style="width:min(760px,100%);max-height:90vh;overflow:auto"><h3>Onboarding History</h3><div id="onboardingHistoryBody"></div><div class="modal-actions"><button class="secondary" onclick="closeOnboardingHistory()">Close</button></div></div></div><div class="toast" id="toast"></div>
 <script>
@@ -91,23 +91,31 @@ let onboardingCases=[],editingOnboardingCase=null,transferringCaseId=null,search
 function onboardingCell(row,keys){for(const k of keys){const found=Object.keys(row||{}).find(x=>x.trim().toLowerCase()===k.toLowerCase());if(found&&row[found]!==''&&row[found]!=null)return String(row[found])}return ''}
 function currentAgent(){return agents.find(a=>String(a.email||'').toLowerCase()===String(currentUser&&currentUser.email||'').toLowerCase())}
 function canManageAllOnboarding(){const a=currentAgent();return isAdmin||['Manager','Team Leader','Supervisor'].includes(a&&a.designation)}
+function onboardingTableFields(){return ['Profile ID',...TRACKER_FIELDS.map(k=>k==='RM'?'RM (Tracker)':k),'Assigned By','RM (Current Agent)','Status','Action']}
+function renderOnboardingHeaders(){
+ $('onboardingHeaders').innerHTML=onboardingTableFields().map(k=>'<th>'+esc(k)+'</th>').join('');
+}
 async function loadOnboardingCases(){
- const body=$('onboardingRows');body.innerHTML='<tr><td colspan="8" class="empty">Loading cases…</td></tr>';
+ renderOnboardingHeaders();
+ const body=$('onboardingRows');body.innerHTML='<tr><td colspan="'+onboardingTableFields().length+'" class="empty">Loading cases…</td></tr>';
  const q=($('onboardingSearch').value||'').trim();
  let query=db.from('onboarding_cases').select('id,profile_id,record_data,search_text,assigned_by,rm_agent_id,rm_agent_name,onboarding_status,created_at,updated_at').order('updated_at',{ascending:false}).limit(500);
  if(q){const safe=q.replace(/[,%()"]/g,' ').trim();query=query.or('profile_id.ilike.%'+safe+'%,search_text.ilike.%'+safe+'%')}
- else if(!canManageAllOnboarding()){const me=currentAgent();if(!me){body.innerHTML='<tr><td colspan="8" class="empty">Your login is not linked to a People agent profile.</td></tr>';return}query=query.eq('rm_agent_id',me.id)}
- const {data,error}=await query;if(error){body.innerHTML='<tr><td colspan="8" class="empty">'+esc(error.message)+'</td></tr>';return}
+ else if(!canManageAllOnboarding()){const me=currentAgent();if(!me){body.innerHTML='<tr><td colspan="'+onboardingTableFields().length+'" class="empty">Your login is not linked to a People agent profile.</td></tr>';return}query=query.eq('rm_agent_id',me.id)}
+ const {data,error}=await query;if(error){body.innerHTML='<tr><td colspan="'+onboardingTableFields().length+'" class="empty">'+esc(error.message)+'</td></tr>';return}
  onboardingCases=data||[];renderOnboardingCases()
 }
 function renderOnboardingCases(){
+ renderOnboardingHeaders();
+ const fields=onboardingTableFields();
  const q=($('onboardingSearch').value||'').trim();$('onboardingCount').textContent=onboardingCases.length+' cases'+(q?' found':' loaded');
  const me=currentAgent();
  $('onboardingRows').innerHTML=onboardingCases.length?onboardingCases.map(c=>{
- const d=c.record_data||{},business=onboardingCell(d,['Business Name']),customer=onboardingCell(d,['Customer Name']),phone=onboardingCell(d,['Phone Number','ALT NO','Alternate no.']),mine=me&&c.rm_agent_id===me.id;
+ const d=c.record_data||{},mine=me&&c.rm_agent_id===me.id;
  let action=mine?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':(canManageAllOnboarding()?'<button class="secondary" onclick="editOnboarding(\''+c.id+'\')">Update</button> <button class="secondary" onclick="openTransfer(\''+c.id+'\')">Transfer</button>':'<button onclick="claimOnboarding(\''+c.id+'\',\''+(c.rm_agent_id||'')+'\')">Assign to Me</button>');
- return '<tr><td>'+esc(c.profile_id)+'</td><td>'+esc(business)+'</td><td>'+esc(customer)+'</td><td>'+esc(phone)+'</td><td>'+esc(c.assigned_by)+'</td><td>'+esc(c.rm_agent_name||'Unassigned')+'</td><td>'+esc(c.onboarding_status)+'</td><td>'+action+' <button class="secondary" onclick="showOnboardingHistory(\''+c.id+'\')">History</button></td></tr>'
- }).join(''):'<tr><td colspan="8" class="empty">No onboarding cases found.</td></tr>'
+ const cells=['<td>'+esc(c.profile_id)+'</td>',...TRACKER_FIELDS.map(k=>'<td>'+esc(d[k]??'')+'</td>'),'<td>'+esc(c.assigned_by)+'</td>','<td>'+esc(c.rm_agent_name||'Unassigned')+'</td>','<td>'+esc(c.onboarding_status)+'</td>','<td>'+action+' <button class="secondary" onclick="showOnboardingHistory(\''+c.id+'\')">History</button></td>'];
+ return '<tr>'+cells.join('')+'</tr>'
+ }).join(''):'<tr><td colspan="'+fields.length+'" class="empty">No onboarding cases found. Headers are shown above; upload/assign data when ready.</td></tr>'
 }
 function searchOnboarding(){clearTimeout(searchTimer);searchTimer=setTimeout(loadOnboardingCases,250)}
 async function claimOnboarding(id,expectedRm){const {data,error}=await db.rpc('claim_onboarding_case',{p_case_id:id,p_expected_rm_agent_id:expectedRm||null});if(error){toast(error.message);return}toast(data&&data.message||'Assigned to you');await loadOnboardingCases()}
