@@ -57,33 +57,43 @@ async function deleteAgent(id){if(!isAdmin){toast('Admin only');return}if(!confi
 function csvRows(text){let out=[],row=[],v='',q=false;for(let i=0;i<text.length;i++){let c=text[i],n=text[i+1];if(c==='"'&&q&&n==='"'){v+='"';i++}else if(c==='"')q=!q;else if(c===','&&!q){row.push(v);v=''}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&n==='\n')i++;row.push(v);if(row.some(x=>x.trim()))out.push(row);row=[];v=''}else v+=c}row.push(v);if(row.some(x=>x.trim()))out.push(row);return out}
 async function uploadPeople(e){
 if(!isAdmin){toast('Admin only');e.target.value='';return}
-let f=e.target.files[0];if(!f)return;
+const f=e.target.files[0];if(!f)return;
 try{
-let rows=csvRows(await f.text());if(!rows.length)throw Error('CSV is empty');
-let h=rows.shift().map(x=>x.trim().toLowerCase()),idx=['employee id','agent name','designation','email'].map(x=>h.indexOf(x));
-if(idx.some(x=>x<0))throw Error('CSV headers: Employee ID, Agent Name, Designation, Email');
-let payload=rows.map(r=>({employee_id:(r[idx[0]]||'').trim(),agent_name:(r[idx[1]]||'').trim(),designation:(r[idx[2]]||'Agent').trim()||'Agent',email:(r[idx[3]]||'').trim().toLowerCase()})).filter(x=>x.employee_id&&x.agent_name&&x.email);
-for(const a of payload)if(!['Agent','Team Leader','Supervisor','Manager'].includes(a.designation))throw Error('Invalid designation for '+a.agent_name+'. Use Agent, Team Leader, Supervisor or Manager.');
-if(!payload.length)throw Error('No valid rows');
-let ids=new Set(),emails=new Set();
-for(const a of payload){
-if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))throw Error('Invalid email in CSV: '+a.email);
-let id=a.employee_id.toLowerCase();
-if(ids.has(id))throw Error('Duplicate Employee ID in CSV: '+a.employee_id);
-if(emails.has(a.email))throw Error('Duplicate email in CSV: '+a.email);
-ids.add(id);emails.add(a.email);
-}
-for(const a of payload){
-if(agents.some(x=>String(x.employee_id).trim().toLowerCase()===a.employee_id.toLowerCase()))throw Error('Employee ID already exists: '+a.employee_id);
-if(agents.some(x=>String(x.email).trim().toLowerCase()===a.email))throw Error('Email already exists: '+a.email);
-}
-let {error}=await db.from('agents').insert(payload);if(error)throw error;
-await loadAgents();await refreshDashboard();toast(payload.length+' agents uploaded');
+ const rows=csvRows(await f.text());if(!rows.length)throw Error('CSV is empty');
+ const h=rows.shift().map(x=>x.trim().toLowerCase());
+ const idx=['employee id','agent name','designation','email','password'].map(x=>h.indexOf(x));
+ if(idx.some(x=>x<0))throw Error('CSV headers required: Employee ID, Agent Name, Designation, Email, Password');
+ const payload=rows.map((r,i)=>({row:i+2,employee_id:(r[idx[0]]||'').trim(),agent_name:(r[idx[1]]||'').trim(),designation:(r[idx[2]]||'Agent').trim()||'Agent',email:(r[idx[3]]||'').trim().toLowerCase(),password:(r[idx[4]]||'')})).filter(x=>x.employee_id||x.agent_name||x.email||x.password);
+ if(!payload.length)throw Error('No valid rows');
+ const ids=new Set(),emails=new Set();
+ for(const a of payload){
+  if(!a.employee_id||!a.agent_name||!a.email||!a.password)throw Error('Row '+a.row+': all five fields are required');
+  if(!['Agent','Team Leader','Supervisor','Manager'].includes(a.designation))throw Error('Row '+a.row+': invalid designation');
+  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(a.email))throw Error('Row '+a.row+': invalid email');
+  if(a.password.length<8)throw Error('Row '+a.row+': password must be at least 8 characters');
+  const id=a.employee_id.toLowerCase();if(ids.has(id))throw Error('Duplicate Employee ID in CSV: '+a.employee_id);
+  if(emails.has(a.email))throw Error('Duplicate email in CSV: '+a.email);
+  ids.add(id);emails.add(a.email);
+  if(agents.some(x=>String(x.employee_id).trim().toLowerCase()===id))throw Error('Employee ID already exists: '+a.employee_id);
+  if(agents.some(x=>String(x.email).trim().toLowerCase()===a.email))throw Error('Email already exists: '+a.email);
+ }
+ let created=0,failures=[];
+ const input=$('peopleFile');if(input)input.disabled=true;
+ try{
+  for(const a of payload){
+   const {data,error}=await db.functions.invoke('admin-create-agent',{body:{employee_id:a.employee_id,agent_name:a.agent_name,email:a.email,password:a.password,designation:a.designation}});
+   if(error||!data?.success){failures.push('Row '+a.row+' ('+a.email+'): '+(data?.error||error?.message||'Creation failed'));continue}
+   created++;
+  }
+ }finally{if(input)input.disabled=false}
+ await loadAgents();await refreshDashboard();
+ if(failures.length)toast(created+' login(s) created; '+failures.length+' failed. '+failures[0]);
+ else toast(created+' agent login(s) created successfully');
 }catch(err){toast(err.message||'CSV upload failed')}finally{e.target.value=''}
 }
 function csvCell(x){return '"'+String(x??'').replace(/"/g,'""')+'"'}
 function download(name,rows){let content=rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url)}
-function sampleCSV(){download('dhanda_people_sample.csv',[['Employee ID','Agent Name','Designation','Email'],['11701','Aftab Ahmed','Agent','aftab@example.com'],['11702','Akhil Qureshi','Team Leader','akhil@example.com']])}
+function sampleCSV(){download('dhanda_people_sample.csv',[['Employee ID','Agent Name','Designation','Email','Password'],['11701','Aftab Ahmed','Agent','aftab@example.com','ChangeMe123!'],['11702','Akhil Qureshi','Team Leader','akhil@example.com','ChangeMe123!']])}
 function exportAgents(){download('dhanda_agents.csv',[['Employee ID','Agent Name','Designation','Email'],...agents.map(a=>[a.employee_id,a.agent_name,a.designation||'Agent',a.email])])}
 async function processPaid(e){let f=e.target.files[0];if(!f)return;if(!agents.length){await loadAgents()}if(!agents.length){toast('Add agents in People first');return}try{let rows;if(f.name.toLowerCase().endsWith('.csv')){let raw=csvRows(await f.text()),head=raw.shift();rows=raw.map(r=>Object.fromEntries(head.map((h,i)=>[h,r[i]??''])))}else{let buf=await f.arrayBuffer(),wb=XLSX.read(buf,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(ws,{defval:''})}if(!rows.length)throw Error('No data rows found');let key=Object.keys(rows[0]).find(k=>k.trim().toLowerCase()==='agent display name');if(!key)throw Error('Column "Agent Display Name" not found');let profileKey=Object.keys(rows[0]).find(k=>k.trim().toLowerCase().replace(/[ _-]+/g,'')==='profileid');if(!profileKey)throw Error('Column "Profile ID" not found. Please upload the report with Profile ID column.');let numericRows=rows.filter(r=>/^\d+(?:\.0)?$/.test(String(r[key]??'').trim()));let seenProfileIds=new Set(),eligible=[],duplicateProfiles=0,blankProfiles=0;for(const row of numericRows){const profileId=String(row[profileKey]??'').trim();if(!profileId){blankProfiles++;continue}const uniqueKey=profileId.toLowerCase();if(seenProfileIds.has(uniqueKey)){duplicateProfiles++;continue}seenProfileIds.add(uniqueKey);eligible.push(row)}let ignored=rows.length-eligible.length;if(!eligible.length)throw Error('No eligible rows with a unique, non-blank Profile ID and numeric Agent Display Name');let base=Math.floor(eligible.length/agents.length),rem=eligible.length%agents.length;distribution=agents.map((a,i)=>({...a,sale_done:base+(i<rem?1:0)}));let {data:upload,error:uerr}=await db.from('paid_uploads').insert({file_name:f.name,total_rows:rows.length,eligible_rows:eligible.length,ignored_rows:ignored,agent_count:agents.length,uploaded_by:currentUser.id}).select().single();if(uerr)throw uerr;let payload=distribution.map(a=>({upload_id:upload.id,agent_id:a.id,employee_id_snapshot:a.employee_id,agent_name_snapshot:a.agent_name,sale_done:a.sale_done}));let {error:derr}=await db.from('paid_distributions').insert(payload);if(derr){await db.from('paid_uploads').delete().eq('id',upload.id);throw derr}let onboardingPayload=eligible.map((row,i)=>{const a=agents[i%agents.length];const profile=String(row[profileKey]??'').trim();const trackerData=Object.assign({},Object.fromEntries(TRACKER_FIELDS.map(k=>[k,''])),row);trackerData.RM=a.agent_name;return {source_upload_id:upload.id,profile_id:profile,record_data:trackerData,search_text:[profile,...Object.values(trackerData).map(v=>String(v??''))].join(' '),assigned_by:(currentAgent()?.agent_name||currentUser.email||'Admin'),rm_agent_id:a.id,rm_agent_name:a.agent_name,onboarding_status:String(trackerData['Onboarding Status']||'Pending')}});for(let i=0;i<onboardingPayload.length;i+=500){const {error:caseError}=await db.from('onboarding_cases').insert(onboardingPayload.slice(i,i+500));if(caseError){await db.from('paid_distributions').delete().eq('upload_id',upload.id);await db.from('paid_uploads').delete().eq('id',upload.id);throw new Error('Onboarding records could not be saved: '+caseError.message)}}$('paidOutput').classList.remove('hidden');$('pTotal').textContent=rows.length;$('pEligible').textContent=eligible.length;$('pIgnored').textContent=ignored;$('pAgents').textContent=agents.length;$('pNote').textContent=`${eligible.length} unique eligible Profile IDs equally divided among ${agents.length} People agents. ${rem ? `${rem} agents receive ${base+1} rows and ${agents.length-rem} agents receive ${base} rows.` : `Each agent receives ${base} rows.`} Duplicate Profile IDs ignored: ${duplicateProfiles}. Blank Profile IDs ignored: ${blankProfiles}. Numeric Agent Display Name rule unchanged; no Employee ID matching is performed.`;$('distRows').innerHTML=distribution.map(a=>`<tr><td>${esc(a.agent_name)}</td><td>${esc(a.employee_id)}</td><td><b>${a.sale_done}</b></td></tr>`).join('');$('paidStatus').innerHTML='<span class="tag">Saved</span> '+esc(f.name)+' · '+duplicateProfiles+' duplicate Profile IDs ignored · '+blankProfiles+' blank Profile IDs ignored';await loadPaidHistory();await refreshDashboard();toast('Distribution saved')}catch(err){$('paidStatus').textContent='Error: '+(err.message||String(err));toast(err.message||'Upload failed')}e.target.value=''}
 async function loadPaidHistory(){const body=$('paidHistoryRows');if(!body)return;body.innerHTML='<tr><td colspan="6" class="empty">Loading history…</td></tr>';let {data,error}=await db.from('paid_uploads').select('id,file_name,total_rows,eligible_rows,ignored_rows,agent_count,created_at').order('created_at',{ascending:false}).limit(100);if(error){body.innerHTML='<tr><td colspan="6" class="empty">'+esc(error.message)+'</td></tr>';return}body.innerHTML=data&&data.length?data.map(x=>`<tr><td>${esc(new Date(x.created_at).toLocaleString())}</td><td>${esc(x.file_name)}</td><td>${x.total_rows}</td><td>${x.eligible_rows}</td><td>${x.ignored_rows}</td><td>${x.agent_count}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">No uploads yet.</td></tr>'}
