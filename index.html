@@ -35,7 +35,7 @@
 const SUPABASE_URL='https://gjqrdmpwpklezncoszxq.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_gZnKjRXHtVlqcRzn0cCvKA_UyCckYDa';
 const ADMIN_EMAIL='bisheshezo@gmail.com';
-const TRACKER_FIELDS=['Customer Phone','ALT NO','Alternate no.','Alternate no. (2)','Alternate no. (3)','Alternate no. (4)','Date','Month','RM','Business Name','Customer Name','Pincode','GMB Email ID','Verification Status at time of Sale','Amount','Validity','Onboarding Call','QR Standy','Verification','GMB Access','Business Name (Tracker)','Business Category','Additional Categories','Opening Date','Phone Number','Website','TOP Selling Items','New Photos','New Videos','Business Location','Reply on Reviews','Service Area','Services','Product List','Onboarding Complete Date','Customer Source','Feedback','Location ID (URL)','Expiry Date','Onboarding Status','Reason for Onboarding Pending','Agent Remarks','Onboarding Complete via','GSTN Number','INVOICE NUMBER','Panel Mobile','After 30 Days Status (RM)','Account Status (Critical Team)','Aisency attributes','Customer Expectation','Premium Status','Form Status','Form Filled','Critical Owner (Only For Critical Team)','Critical Status (Only For Critical Team)'];
+const TRACKER_FIELDS=['Customer Phone','ALT NO','Alternate no.','Alternate no. (2)','Alternate no. (3)','Alternate no. (4)','Date','Month','RM','Business Name','Customer Name','Pincode','GMB Email ID','Verification Status at time of Sale','Amount','Validity','Onboarding Call','QR Standy','Verification','GMB Access','Business Name (Tracker)','Business Category','Additional Categories','Opening Date','Phone Number','Website','TOP Selling Items','New Photos','New Videos','Business Location','Reply on Reviews','Service Area','Services','Product List','Onboarding Complete Date','Customer Source','Feedback','Location ID (URL)','Expiry Date','Onboarding Status','Reason for Onboarding Pending','Agent Remarks','Onboarding Complete via','GSTN Number','INVOICE NUMBER','Panel Mobile','After 30 Days Status (RM)','Account Status (Critical Team)','Aisency attributes','Customer Expectation','Premium Status','Form Status','Form Filled','Critical Owner (Only For Critical Team)','Selling Items','Brand Name','Brand Logo','Phone on Poster','Address on Poster','Additional Info on Post','City Name','Communication Phone','Store Front','Founder Photo','Founder Name','Founder Gender','Use Image In Promotional Post','How you are different than competition','Why customer should visit you','Low standards of industry','Your solutions for low standards','Malpractices in industry','Your solutions for malpractices','Common Mistakes by customers','Guidelines to customer','Additional Instructions','Interior Photo - 1 (Entrance)','Interior Photo - 2 (Seating / Counter)','Interior Photo - 3 (Peak time rush photo)','Interior Photo - 4 (Additional)','Interior Photo - 5 (Additional)','Team Photo - 1 (With Owner)','Team Photo - 2 (Working)','Team Photo - 3 (At Entrance)','Team Photo - 4 (Additional)','Critical Status (Only For Critical Team)'];
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 let currentUser=null,isAdmin=false,allowedTabs=[],agents=[],distribution=[];
 const $=id=>document.getElementById(id);
@@ -191,7 +191,9 @@ const ONBOARDING_DROPDOWNS={
 'Verification':['Updated Manually','Not Needed','Auto Updated'],
 'GMB Access':['Active','Validity Expired','RM Not checked','Access Removed','Unverified'],
 'Form Status':['Done','Pending','Inprocess','Not Required'],
-'Form Filled':['Done','Pending']
+'Form Filled':['Done','Pending'],
+'Founder Gender':['Not set','Male','Female','Other'],
+'Use Image In Promotional Post':['On','Off']
 };
 function onboardingFieldControl(k,v,i){
  const opts=ONBOARDING_DROPDOWNS[k];
