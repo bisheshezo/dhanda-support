@@ -1,24 +1,28 @@
 # Employee Performance Dashboard
 
-Static browser-based dashboard for importing employee performance, login/logout and paid-report exports.
+Compiled employee-wise performance dashboard for September, October and November 2026 (November data through the 13th).
 
-## Cloudflare Workers deployment
+## Deployment
 
-This folder is deployed as a separate Worker using `wrangler.jsonc`.
-
+- Separate Worker name: `employee-performance`
+- Wrangler config: `wrangler.jsonc`
+- Encrypted dataset: `data.enc.json`
 - Keep the Workers Builds root directory blank (repository root).
 - Deploy command: `npx wrangler deploy --config performance-dashboard/wrangler.jsonc`
 - Preview command: `npx wrangler preview --config performance-dashboard/wrangler.jsonc`
-- The Wrangler assets directory is relative to this config file and is set to `.`.
 
-## Privacy
+## Data security
 
-- Uploaded files are processed locally in the browser.
-- No employee rows are bundled into this repository.
-- No API/database upload is performed by this starter.
-- Refreshing the page clears the imported data.
-- Protect the deployed Worker with Cloudflare Access before importing or storing any real employee data.
+- The compiled employee dataset is compressed and encrypted with AES-256-GCM.
+- The key is derived from a private passphrase using PBKDF2-SHA256 (310,000 iterations).
+- The passphrase is not stored in this repository.
+- The browser decrypts the dataset only after the passphrase is entered.
+- Do not share the passphrase. Add Cloudflare Access for an additional owner-only sign-in layer.
 
-## Important
+## Included metrics
 
-Column matching is heuristic. Validate field mappings and calculations against the original exports before using this for payroll, incentives, attendance or formal performance decisions.
+Employee profiles, monthly performance, daily attendance/login span, first login, last logout, 9-hour days, CDR calls and modes, talk time, sales and available pause/break summaries.
+
+## Caveat
+
+This dashboard reflects the previously compiled source file. Confirm individual employee figures against source exports before using them for payroll, incentives or formal HR decisions.
